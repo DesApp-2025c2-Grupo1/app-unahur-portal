@@ -1,17 +1,9 @@
 const express = require('express');
-const dotenv = require('dotenv');
 const swaggerUi = require('swagger-ui-express');
-const swaggerDocument = require('./config/swagger');
+const swaggerDocument = require('./config/swagger.config');
 
 // routes
 const authRoutes = require('./modules/auth/routes/auth');
-// const adminRoutes = require('./modules/admin/routes/admin');
-// const affiliateRoutes = require('./modules/affiliate/routes/affiliate');
-// const providerRoutes = require('./modules/provider/routes/provider');
-
-dotenv.config();
-
-const PORT = process.env.PORT;
 
 const app = express();
 
@@ -29,4 +21,3 @@ app.use('/auth', authRoutes);
 // app.use('/provider', providerRoutes);
 
 module.exports = app;
-
