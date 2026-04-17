@@ -1,0 +1,18 @@
+services:
+  app-unahur-portal:
+    build: .
+    image: unahur/app-portal:1.0
+    container_name: app-unahur-portal
+    ports:
+      - "9002:9002"
+    environment:
+      - PORT=9002
+    volumes:
+      - ./:/app 
+      - /app/node_modules 
+    networks:
+      - ms-unahur-portal-network
+
+networks:
+  ms-unahur-portal-network:
+    driver: bridge
