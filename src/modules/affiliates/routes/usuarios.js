@@ -270,4 +270,189 @@ router.put('/usuarios/:id_usuario/estado', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /affiliates/usuarios/login:
+ *   post:
+ *     summary: Autentica un usuario por DNI y contraseña
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               dni:
+ *                 type: string
+ *                 description: DNI del usuario
+ *               password:
+ *                 type: string
+ *                 description: Contraseña del usuario
+ *             required:
+ *               - dni
+ *               - password
+ *     responses:
+ *       200:
+ *         description: Autenticación exitosa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id_usuario:
+ *                   type: integer
+ *                 email:
+ *                   type: string
+ *                 dni:
+ *                   type: string
+ *                 nombre:
+ *                   type: string
+ *                 apellido:
+ *                   type: string
+ *                 activo:
+ *                   type: boolean
+ *       400:
+ *         description: DNI o contraseña inválidos
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.post('/usuarios/login', async (req, res) => {
+  try {
+    const { dni, password } = req.body;
+
+    if (!dni || !password) {
+      return res.status(400).json({ error: 'DNI y contraseña son requeridos' });
+    }
+
+    const user = await usuariosService.loginUser(dni, password);
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Error en POST /usuarios/login:', error);
+
+    if (error.message === 'INVALID_CREDENTIALS') {
+      return res.status(401).json({ error: 'DNI o contraseña inválidos' });
+    }
+
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * @swagger
+ * /affiliates/usuarios/me:
+ *   get:
+ *     summary: Obtiene los datos del usuario autenticado
+ *     parameters:
+ *       - in: query
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del usuario (temporal, requiere auth)
+ *     responses:
+ *       200:
+ *         description: Usuario obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 id_usuario:
+ *                   type: integer
+ *                 email:
+ *                   type: string
+ *                 dni:
+ *                   type: string
+ *                 nombre:
+ *                   type: string
+ *                 apellido:
+ *                   type: string
+ *                 activo:
+ *                   type: boolean
+ *                 roles:
+ *                   type: array
+ *       404:
+ *         description: Usuario no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.get('/usuarios/me', async (req, res) => {
+  try {
+    const { id } = req.query;
+
+    if (!id || !Number.isInteger(parseInt(id, 10))) {
+      return res.status(400).json({ error: 'El parámetro id es requerido y debe ser un número entero' });
+    }
+
+    const user = await usuariosService.getUserMe(parseInt(id, 10));
+
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error('Error en GET /usuarios/me:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+/**
+ * @swagger
+ * /affiliates/usuarios/{id}/familia:
+ *   get:
+ *     summary: Obtiene el grupo familiar de un usuario
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: ID del usuario
+ *     responses:
+ *       200:
+ *         description: Grupo familiar obtenido correctamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id_usuario:
+ *                     type: integer
+ *                   nombre:
+ *                     type: string
+ *                   apellido:
+ *                     type: string
+ *                   dni:
+ *                     type: string
+ *                   relacion:
+ *                     type: string
+ *       404:
+ *         description: Usuario no encontrado
+ *       500:
+ *         description: Error interno del servidor
+ */
+router.get('/usuarios/:id/familia', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!Number.isInteger(parseInt(id, 10))) {
+      return res.status(400).json({ error: 'El ID debe ser un número entero' });
+    }
+
+    const familia = await usuariosService.getFamiliaUsuario(parseInt(id, 10));
+    res.status(200).json(familia);
+  } catch (error) {
+    console.error('Error en GET /usuarios/:id/familia:', error);
+
+    if (error.message === 'USER_NOT_FOUND') {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;
