@@ -4,25 +4,43 @@ services:
     image: unahur/app-portal:1.0
     container_name: app-unahur-portal
     ports:
-      - "9002:9002" # Modificar luego por ${PORT}:${PORT}
+      - "${PORT}:${PORT}"
     environment:
-      - PORT=9002 # Modificar luego por ${PORT}
-      - DB_HOST=app-unahur-portal-db # Modificar luego por ${DB_HOST}
-      - DB_PORT=5432 # Modificar luego por ${DB_PORT}
+      PORT: ${PORT}
+      DB_HOST: app-unahur-portal-db
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
     volumes:
       - ./:/app 
       - /app/node_modules 
     networks:
       - ms-unahur-portal-network
+    depends_on:
+      - app-unahur-portal-db
+
   app-unahur-portal-db:
     image: postgres:15
     container_name: app-unahur-portal-db
     ports:
-      - "5433:5432"
+      - "${DB_PORT_EXTERNAL:-5433}:5432"
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-app-unahur-portal}
+    networks:
+      - ms-unahur-portal-network
+
+  app-unahur-pgadmin:
+    image: dpage/pgadmin4
+    container_name: app-unahur-pgadmin
+    ports:
+      - "8080:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-adminpassword}
     networks:
       - ms-unahur-portal-network
 

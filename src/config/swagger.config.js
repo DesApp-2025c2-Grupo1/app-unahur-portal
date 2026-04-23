@@ -1,4 +1,7 @@
 const swaggerJsdoc = require('swagger-jsdoc');
+const dotenv = require('dotenv');
+
+dotenv.config();
 
 const options = {
     definition: {
@@ -8,7 +11,7 @@ const options = {
             version: '1.0.0',
             description: 'Documentación de la API de la UNAHUR',
         },
-        servers: [{ url: 'http://localhost:9002' }],
+        servers: [{ url: `http://localhost:${process.env.PORT}` }],
     },
     apis: ['./src/modules/**/*.js', './src/routes/**/*.js'],
 };

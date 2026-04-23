@@ -48,26 +48,4 @@ router.post('/login', authService.login);
  */
 router.post('/register', authService.register);
 
-/**
- * @swagger
- * /auth/logout:
- *   post:
- *     summary: Cierra sesión
- *     responses:
- *       200:
- *         description: Sesión cerrada correctamente
- */
-router.post('/logout', authService.logout);
-
-/**
- * @swagger
- * /auth/refresh-token:
- *   post:
- *     summary: Refresca el token de acceso
- *     responses:
- *       200:
- *         description: Token de acceso refrescado correctamente
- */
-router.post('/refresh-token', authService.refreshToken);
-
 module.exports = router;
