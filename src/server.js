@@ -1,6 +1,5 @@
 const app = require('./index');
 const dotenv = require('dotenv');
-const pool = require('./config/db.config');
 
 dotenv.config();
 
