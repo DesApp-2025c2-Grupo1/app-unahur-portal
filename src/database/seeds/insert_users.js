@@ -3,50 +3,31 @@
  * @returns { Promise<void> } 
  */
 exports.seed = async function (knex) {
-  // Deletes ALL existing entries
-  await knex('usuario_roles').del()
-  await knex('usuarios').del()
+  // Deletes ALL existing entries in dependent tables first
+  await knex('user_roles').del()
+  await knex('users').del()
   
-  await knex('usuarios').insert([
+  await knex('users').insert([
     {
-      id_usuario: 1,
+      id: 1,
       email: 'admin@mediunahur.com',
-      password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
-      nombre: 'Admin',
-      apellido: 'Principal',
-      activo: true,
-      fecha_creacion: new Date(),
-      fecha_actualizacion: new Date()
+      password: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.' // 'admin123'
     },
     {
-      id_usuario: 2,
-      email: 'afil@unahur.edu.ar',
-      password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
-      dni: '12345678',
-      nombre: 'Ana',
-      apellido: 'García',
-      activo: true,
-      fecha_creacion: new Date(),
-      fecha_actualizacion: new Date()
+      id: 2,
+      email: 'afiliado@test.com',
+      password: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.'
     },
     {
-      id_usuario: 3,
-      email: 'clinica@mediunahur.com',
-      password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
-      cuit: '30123456789',
-      nombre: 'Clínica del Norte',
-      apellido: null,
-      activo: true,
-      fecha_creacion: new Date(),
-      fecha_actualizacion: new Date()
+      id: 3,
+      email: 'proveedor@test.com',
+      password: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.'
     }
   ]);
 
-  await knex('usuario_roles').insert([
-    { id_usuario: 1, id_rol: 1 }, // Admin
-    { id_usuario: 2, id_rol: 2 }, // Afiliado
-    { id_usuario: 3, id_rol: 3 }  // Proveedor
+  await knex('user_roles').insert([
+    { user_id: 1, role_id: 1 },
+    { user_id: 2, role_id: 2 },
+    { user_id: 3, role_id: 3 }
   ]);
 };
-
-
