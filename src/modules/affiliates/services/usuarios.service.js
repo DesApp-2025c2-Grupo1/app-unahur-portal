@@ -1,4 +1,5 @@
-const pool = require('../../../config/db.config');
+const db = require('../../../database/db');
+const bcrypt = require('bcryptjs');
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
 
@@ -7,34 +8,37 @@ const mockUsuarios = [
     id_usuario: 1,
     email: 'ana.garcia@unahur.edu.ar',
     dni: '12345678',
+    password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
     nombre: 'Ana',
     apellido: 'García',
     activo: true,
     fecha_creacion: '2024-01-15T10:00:00.000Z',
     id_grupo_familiar: 1,
-    roles: [{ id_rol: 1, nombre_rol: 'Afiliado' }]
+    roles: 2
   },
   {
     id_usuario: 2,
     email: 'carlos.lopez@unahur.edu.ar',
     dni: '23456789',
     nombre: 'Carlos',
+    password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
     apellido: 'López',
     activo: true,
     fecha_creacion: '2024-02-20T09:30:00.000Z',
     id_grupo_familiar: 2,
-    roles: [{ id_rol: 2, nombre_rol: 'Admin' }]
+    roles: 2
   },
   {
     id_usuario: 3,
     email: 'maria.perez@unahur.edu.ar',
     dni: '34567890',
     nombre: 'María',
+    password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
     apellido: 'Pérez',
     activo: false,
     fecha_creacion: '2024-03-10T14:15:00.000Z',
     id_grupo_familiar: 1,
-    roles: []
+    roles: 2
   },
   {
     id_usuario: 4,
@@ -42,10 +46,11 @@ const mockUsuarios = [
     dni: '45678901',
     nombre: 'Juan',
     apellido: 'Martínez',
+    password_hash: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.',
     activo: true,
     fecha_creacion: '2024-04-05T08:00:00.000Z',
     id_grupo_familiar: 1,
-    roles: [{ id_rol: 1, nombre_rol: 'Afiliado' }]
+    roles: 2
   }
 ];
 
@@ -77,24 +82,22 @@ const getUserById = async (id_usuario) => {
     return user || null;
   }
 
-  const query = `
-    SELECT
-      u.id_usuario,
-      u.email,
-      u.activo,
-      u.fecha_creacion,
-      json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol))
-        FILTER (WHERE r.id_rol IS NOT NULL) as roles
-    FROM usuarios u
-    LEFT JOIN usuario_roles ur ON u.id_usuario = ur.id_usuario
-    LEFT JOIN roles r ON ur.id_rol = r.id_rol
-    WHERE u.id_usuario = $1
-    GROUP BY u.id_usuario, u.email, u.activo, u.fecha_creacion
-  `;
-
   try {
-    const result = await pool.query(query, [id_usuario]);
-    return result.rows.length > 0 ? result.rows[0] : null;
+    const user = await db('usuarios as u')
+      .select(
+        'u.id_usuario',
+        'u.email',
+        'u.activo',
+        'u.fecha_creacion',
+        db.raw("json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol)) FILTER (WHERE r.id_rol IS NOT NULL) as roles")
+      )
+      .leftJoin('usuario_roles as ur', 'u.id_usuario', 'ur.id_usuario')
+      .leftJoin('roles as r', 'ur.id_rol', 'r.id_rol')
+      .where('u.id_usuario', id_usuario)
+      .groupBy('u.id_usuario', 'u.email', 'u.activo', 'u.fecha_creacion')
+      .first();
+
+    return user || null;
   } catch (error) {
     throw new Error(`Error fetching user: ${error.message}`);
   }
@@ -116,36 +119,30 @@ const getAllUsers = async (page = 1, limit = 10) => {
 
   const offset = (page - 1) * limit;
 
-  const query = `
-    SELECT
-      u.id_usuario,
-      u.email,
-      u.activo,
-      u.fecha_creacion,
-      json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol))
-        FILTER (WHERE r.id_rol IS NOT NULL) as roles
-    FROM usuarios u
-    LEFT JOIN usuario_roles ur ON u.id_usuario = ur.id_usuario
-    LEFT JOIN roles r ON ur.id_rol = r.id_rol
-    GROUP BY u.id_usuario, u.email, u.activo, u.fecha_creacion
-    ORDER BY u.id_usuario ASC
-    LIMIT $1 OFFSET $2
-  `;
-
-  const countQuery = 'SELECT COUNT(*) as total FROM usuarios';
-
   try {
-    const [usersResult, countResult] = await Promise.all([
-      pool.query(query, [limit, offset]),
-      pool.query(countQuery)
-    ]);
+    const users = await db('usuarios as u')
+      .select(
+        'u.id_usuario',
+        'u.email',
+        'u.activo',
+        'u.fecha_creacion',
+        db.raw("json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol)) FILTER (WHERE r.id_rol IS NOT NULL) as roles")
+      )
+      .leftJoin('usuario_roles as ur', 'u.id_usuario', 'ur.id_usuario')
+      .leftJoin('roles as r', 'ur.id_rol', 'r.id_rol')
+      .groupBy('u.id_usuario', 'u.email', 'u.activo', 'u.fecha_creacion')
+      .orderBy('u.id_usuario', 'asc')
+      .limit(limit)
+      .offset(offset);
+
+    const [{ total }] = await db('usuarios').count('id_usuario as total');
 
     return {
-      usuarios: usersResult.rows,
+      usuarios: users,
       pagination: {
-        page,
-        limit,
-        total: parseInt(countResult.rows[0].total, 10)
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total: parseInt(total, 10)
       }
     };
   } catch (error) {
@@ -168,30 +165,17 @@ const addRoleToUser = async (id_usuario, id_rol) => {
     return { id_usuario: parseInt(id_usuario, 10), id_rol: parseInt(id_rol, 10) };
   }
 
-  const checkUserQuery = 'SELECT id_usuario FROM usuarios WHERE id_usuario = $1';
-  const checkRoleQuery = 'SELECT id_rol FROM roles WHERE id_rol = $1';
-  const insertQuery = `
-    INSERT INTO usuario_roles (id_usuario, id_rol)
-    VALUES ($1, $2)
-    ON CONFLICT (id_usuario, id_rol) DO NOTHING
-  `;
-
   try {
-    const userResult = await pool.query(checkUserQuery, [id_usuario]);
-    if (userResult.rows.length === 0) {
-      throw new Error('USER_NOT_FOUND');
-    }
+    const user = await db('usuarios').where('id_usuario', id_usuario).first();
+    if (!user) throw new Error('USER_NOT_FOUND');
 
-    const roleResult = await pool.query(checkRoleQuery, [id_rol]);
-    if (roleResult.rows.length === 0) {
-      throw new Error('ROLE_NOT_FOUND');
-    }
+    const role = await db('roles').where('id_rol', id_rol).first();
+    if (!role) throw new Error('ROLE_NOT_FOUND');
 
-    const insertResult = await pool.query(insertQuery, [id_usuario, id_rol]);
-
-    if (insertResult.rowCount === 0) {
-      throw new Error('ROLE_ALREADY_ASSIGNED');
-    }
+    await db('usuario_roles')
+      .insert({ id_usuario, id_rol })
+      .onConflict(['id_usuario', id_rol])
+      .ignore();
 
     return { id_usuario, id_rol };
   } catch (error) {
@@ -209,22 +193,16 @@ const toggleUserStatus = async (id_usuario) => {
     return userWithoutRoles;
   }
 
-  const checkUserQuery = 'SELECT id_usuario FROM usuarios WHERE id_usuario = $1';
-  const updateQuery = `
-    UPDATE usuarios
-    SET activo = NOT activo
-    WHERE id_usuario = $1
-    RETURNING id_usuario, email, activo, fecha_creacion
-  `;
-
   try {
-    const userResult = await pool.query(checkUserQuery, [id_usuario]);
-    if (userResult.rows.length === 0) {
-      throw new Error('USER_NOT_FOUND');
-    }
+    const user = await db('usuarios').where('id_usuario', id_usuario).first();
+    if (!user) throw new Error('USER_NOT_FOUND');
 
-    const updateResult = await pool.query(updateQuery, [id_usuario]);
-    return updateResult.rows[0];
+    const [updatedUser] = await db('usuarios')
+      .where('id_usuario', id_usuario)
+      .update({ activo: !user.activo })
+      .returning(['id_usuario', 'email', 'activo', 'fecha_creacion']);
+
+    return updatedUser;
   } catch (error) {
     throw error;
   }
@@ -232,28 +210,47 @@ const toggleUserStatus = async (id_usuario) => {
 
 const loginUser = async (dni, password) => {
   if (USE_MOCK) {
-    const user = mockUsuarios.find(u => u.dni === dni);
+    console.log("PRUEBAAAAA DNI", dni, password)
+    const user = mockUsuarios.find(u => u.dni === dni && u.activo);
     if (!user) throw new Error('INVALID_CREDENTIALS');
+
+    // Check if user has AFILIADO role in mock data
+    const hasRole = user.roles.some(r => r.nombre_rol.toUpperCase() === 'AFILIADO');
+    if (!hasRole) throw new Error('INVALID_CREDENTIALS');
+    console.log("PRUEBAAAAA 4", user)
+
     const { roles, id_grupo_familiar, ...userWithoutRoles } = user;
     return userWithoutRoles;
   }
 
-  const query = `
-    SELECT id_usuario, email, dni, nombre, apellido, activo, fecha_creacion
-    FROM usuarios
-    WHERE dni = $1 AND activo = true
-  `;
-
   try {
-    const result = await pool.query(query, [dni]);
-    if (result.rows.length === 0) {
+    //obtengo el usuario con su unico rol
+    const user = await db('usuarios as u')
+      .select('u.*')
+      .join('roles as r', 'u.role_id', 'r.id')
+      .where({
+        'u.dni': dni,
+        'u.is_active': true,
+        'r.name': 'AFILIADO'
+      })
+      .first();
+
+    if (!user) {
       throw new Error('INVALID_CREDENTIALS');
     }
-    return result.rows[0];
+
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    if (!isPasswordValid) {
+      throw new Error('INVALID_CREDENTIALS');
+    }
+
+    const { password_hash, ...userPublic } = user;
+    return userPublic;
   } catch (error) {
     throw error;
   }
 };
+
 
 const getUserMe = async (id_usuario) => {
   if (USE_MOCK) {
@@ -262,27 +259,25 @@ const getUserMe = async (id_usuario) => {
     return user;
   }
 
-  const query = `
-    SELECT
-      u.id_usuario,
-      u.email,
-      u.dni,
-      u.nombre,
-      u.apellido,
-      u.activo,
-      u.fecha_creacion,
-      json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol))
-        FILTER (WHERE r.id_rol IS NOT NULL) as roles
-    FROM usuarios u
-    LEFT JOIN usuario_roles ur ON u.id_usuario = ur.id_usuario
-    LEFT JOIN roles r ON ur.id_rol = r.id_rol
-    WHERE u.id_usuario = $1
-    GROUP BY u.id_usuario, u.email, u.dni, u.nombre, u.apellido, u.activo, u.fecha_creacion
-  `;
-
   try {
-    const result = await pool.query(query, [id_usuario]);
-    return result.rows.length > 0 ? result.rows[0] : null;
+    const user = await db('usuarios as u')
+      .select(
+        'u.id_usuario',
+        'u.email',
+        'u.dni',
+        'u.nombre',
+        'u.apellido',
+        'u.activo',
+        'u.fecha_creacion',
+        db.raw("json_agg(json_build_object('id_rol', r.id_rol, 'nombre_rol', r.nombre_rol)) FILTER (WHERE r.id_rol IS NOT NULL) as roles")
+      )
+      .leftJoin('usuario_roles as ur', 'u.id_usuario', 'ur.id_usuario')
+      .leftJoin('roles as r', 'ur.id_rol', 'r.id_rol')
+      .where('u.id_usuario', id_usuario)
+      .groupBy('u.id_usuario', 'u.email', 'u.dni', 'u.nombre', 'u.apellido', 'u.activo', 'u.fecha_creacion')
+      .first();
+
+    return user || null;
   } catch (error) {
     throw new Error(`Error fetching user: ${error.message}`);
   }
@@ -299,24 +294,22 @@ const getFamiliaUsuario = async (id_usuario) => {
     return grupo.usuarios;
   }
 
-  const query = `
-    SELECT
-      u.id_usuario,
-      u.nombre,
-      u.apellido,
-      u.dni,
-      gf.relacion
-    FROM usuarios u
-    JOIN grupo_familiar gf ON u.id_usuario = gf.id_usuario
-    WHERE gf.id_grupo_familiar = (
-      SELECT id_grupo_familiar FROM usuarios WHERE id_usuario = $1
-    )
-    ORDER BY gf.relacion DESC, u.nombre ASC
-  `;
-
   try {
-    const result = await pool.query(query, [id_usuario]);
-    return result.rows;
+    const user = await db('usuarios').where('id_usuario', id_usuario).first();
+    if (!user) throw new Error('USER_NOT_FOUND');
+
+    const familia = await db('usuarios as u')
+      .select('u.id_usuario', 'u.nombre', 'u.apellido', 'u.dni', 'gf.relacion')
+      .join('grupo_familiar as gf', 'u.id_usuario', 'gf.id_usuario')
+      .where('gf.id_grupo_familiar', function () {
+        this.select('id_grupo_familiar').from('usuarios').where('id_usuario', id_usuario);
+      })
+      .orderBy([
+        { column: 'gf.relacion', order: 'desc' },
+        { column: 'u.nombre', order: 'asc' }
+      ]);
+
+    return familia;
   } catch (error) {
     throw new Error(`Error fetching familia: ${error.message}`);
   }
@@ -331,3 +324,4 @@ module.exports = {
   getUserMe,
   getFamiliaUsuario
 };
+

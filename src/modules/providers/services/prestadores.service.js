@@ -1,4 +1,5 @@
-const pool = require('../../../config/db.config');
+const db = require('../../../database/db');
+const bcrypt = require('bcryptjs');
 
 const USE_MOCK = process.env.USE_MOCK === 'true';
 
@@ -43,55 +44,37 @@ const mockPrestadores = [
  */
 const loginPrestador = async (cuit, password) => {
   if (USE_MOCK) {
-    // Normalizamos el CUIT para comparar sin guiones
     const cuitNormalizado = cuit.replace(/-/g, '');
     const prestador = mockPrestadores.find(
       (p) => p.cuit.replace(/-/g, '') === cuitNormalizado && p.activo
     );
     if (!prestador) throw new Error('INVALID_CREDENTIALS');
 
-    // Devolvemos sin el campo roles para no exponer info innecesaria en el login
     const { roles, ...prestadorPublico } = prestador;
     return prestadorPublico;
   }
 
-  // Normalizar CUIT: quitar guiones para buscar en DB
   const cuitNormalizado = cuit.replace(/-/g, '');
 
-  const query = `
-    SELECT
-      u.id_usuario,
-      u.email,
-      u.cuit,
-      u.nombre,
-      u.activo,
-      u.fecha_creacion,
-      u.password_hash
-    FROM usuarios u
-    JOIN usuarios_roles ur ON u.id_usuario = ur.id_usuario
-    JOIN roles r            ON ur.id_rol   = r.id_rol
-    WHERE REPLACE(u.cuit, '-', '') = $1
-      AND r.nombre = 'prestador'
-      AND u.activo = true
-  `;
-
   try {
-    const result = await pool.query(query, [cuitNormalizado]);
+    const prestador = await db('usuarios as u')
+      .select('u.id_usuario', 'u.email', 'u.cuit', 'u.nombre', 'u.activo', 'u.fecha_creacion', 'u.password_hash')
+      .join('usuario_roles as ur', 'u.id_usuario', 'ur.id_usuario')
+      .join('roles as r', 'ur.id_rol', 'r.id_rol')
+      .whereRaw("REPLACE(u.cuit, '-', '') = ?", [cuitNormalizado])
+      .andWhere('r.name', 'PROVEEDOR') // In the seed it was 'PROVEEDOR'
+      .andWhere('u.activo', true)
+      .first();
 
-    if (result.rows.length === 0) {
+    if (!prestador) {
       throw new Error('INVALID_CREDENTIALS');
     }
 
-    const prestador = result.rows[0];
-
-    // TODO: cuando se integre bcrypt reemplazar esta comparación
-    // const passwordValida = await bcrypt.compare(password, prestador.password_hash);
-    const passwordValida = password === prestador.password_hash;
+    const passwordValida = await bcrypt.compare(password, prestador.password_hash);
     if (!passwordValida) {
       throw new Error('INVALID_CREDENTIALS');
     }
 
-    // No devolver el hash al cliente
     const { password_hash, ...prestadorPublico } = prestador;
     return prestadorPublico;
   } catch (error) {
@@ -102,3 +85,4 @@ const loginPrestador = async (cuit, password) => {
 module.exports = {
   loginPrestador
 };
+

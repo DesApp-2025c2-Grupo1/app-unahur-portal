@@ -53,14 +53,17 @@ const usuariosService = require('../services/usuarios.service');
 router.post('/usuarios/login', async (req, res) => {
   try {
     const { dni, password } = req.body;
-
+    console.log("PRUEBAAAAA", dni, password)
     if (!dni || !password) {
       return res.status(400).json({ error: 'DNI y contraseña son requeridos' });
     }
+    console.log("PRUEBAAAAA2", dni, password)
 
     const user = await usuariosService.loginUser(dni, password);
+    console.log("PRUEBAAAAA3", user)
     res.status(200).json(user);
   } catch (error) {
+    console.log("PRUEBAAAAA4", error)
     console.error('Error en POST /usuarios/login:', error);
 
     if (error.message === 'INVALID_CREDENTIALS') {

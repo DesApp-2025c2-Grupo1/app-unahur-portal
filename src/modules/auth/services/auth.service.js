@@ -16,6 +16,12 @@ const login = async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
+        // Check if user has ADMIN role
+        const hasAdminRole = user.roles && user.roles.includes('ADMIN');
+        if (!hasAdminRole) {
+            return res.status(403).json({ message: 'Access denied: Admin role required' });
+        }
+
         const isPasswordValid = await bcrypt.compare(password, user.password_hash);
         if (!isPasswordValid) {
             return res.status(401).json({ message: 'Invalid credentials' });
@@ -28,6 +34,7 @@ const login = async (req, res) => {
         return res.status(500).json({ message: 'Internal server error' });
     }
 };
+
 
 const register = async (req, res) => {
     try {
