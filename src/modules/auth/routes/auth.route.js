@@ -9,6 +9,7 @@ const authService = require('../services/auth.service');
  * /auth/login:
  *   post:
  *     summary: Inicia sesión
+ *     tags: [Auth]
  *     requestBody:
  *       required: true
  *       content:
@@ -25,27 +26,5 @@ const authService = require('../services/auth.service');
  *         description: Sesión iniciada correctamente
  */
 router.post('/login', authService.login);
-
-/**
- * @swagger
- * /auth/register:
- *   post:
- *     summary: Registra un nuevo usuario
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               email:
- *                 type: string
- *               password:
- *                 type: string
- *     responses:
- *       200:
- *         description: Usuario registrado correctamente
- */
-router.post('/register', authService.register);
 
 module.exports = router;
