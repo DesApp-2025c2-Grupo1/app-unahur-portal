@@ -33,9 +33,35 @@ CREATE TABLE affiliates(
     birth_date DATE NOT NULL,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    email VARCHAR(100) NOT NULL,
     affiliate_state_id INT NOT NULL,
+    plan_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+// el tema de los correos y telefonos hay que verlo porque un afiliado puede tener mas de uno, por eso separamos en otras tablas. 
+// por ahora lo dejamos asi, pero despues separamos en otras tablas.
+
+CREATE TABLE plans(
+    id INT primary key auto_increment,
+    name VARCHAR(255) NOT NULL,
+    description VARCHAR(255) NOT NULL,
+    price DECIMAL(10, 2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE affiliate_emails(
+    id INT primary key auto_increment,
+    affiliate_id INT NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE affiliate_phones(
+    id INT primary key auto_increment,
+    affiliate_id INT NOT NULL,
+    phone VARCHAR(20) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -43,18 +69,14 @@ CREATE TABLE affiliates(
 CREATE TABLE affiliate_states(
     id INT primary key auto_increment,
     affiliate_id INT NOT NULL,
-    state VARCHAR(20) NOT NULL, -- Pendiente, Activo, Inactivo.
+    state VARCHAR(20) NOT NULL, // Pendiente, Activo, Inactivo.
+    modificated_by VARCHAR(100) NOT NULL, // nombre del usuario que modifico el estado (admin)
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE addresses(
-    id INT primary key auto_increment,
-    affiliate_id INT NOT NULL,
-    address VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+
+//Todo lo relacionado a prestadores
 
 CREATE TABLE providers(
     id INT primary key auto_increment,
@@ -68,6 +90,11 @@ CREATE TABLE providers(
 );
 
 ### Nota:
-- Cuando un afiliado se registra, se crea un registro en la tabla affiliates con el estado Pendiente.
-- Cuando el administrador activa el registro, se cambia el estado a Activo y se lo deja iniciar sesión.
-- El alta de un prestador lo hace directamente el administrador y relaciona el usuario creado con la tabla prestadores.
+- El afiliado ingresa a la aplicación portal para afiliados o prestadores
+- Inicia sesión o se registra
+    - se crea usuario en user y en la tabla que corresponda (affiliate, provider)
+- El administrador tiene otra vista en otra aplicación y el inicia sesión por esa aplicación 
+- El administardor puede ver los datos de los afiliados, 
+    - de los que estan pendientes de activacion y puede activar o desactivar la cuenta.
+- El prestador puede ver los datos de los afiliados, y gestionar sus datos personales.
+- El afiliado puede ver sus datos personales y gestionar sus datos personales.
