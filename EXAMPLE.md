@@ -41,11 +41,13 @@ CREATE TABLE affiliates(
 // el tema de los correos y telefonos hay que verlo porque un afiliado puede tener mas de uno, por eso separamos en otras tablas. 
 // por ahora lo dejamos asi, pero despues separamos en otras tablas.
 
+
+//los planes que existen son - 210 - 310 - 410 - 510 | 210 (BRONCE) , 310 (PLATA), 410 (ORO), 510 (PLATINO)
+//el afiliado puede tener un unico plan y su grupo familiar tendran el mismo
 CREATE TABLE plans(
     id INT primary key auto_increment,
-    name VARCHAR(255) NOT NULL,
-    description VARCHAR(255) NOT NULL,
-    price DECIMAL(10, 2) NOT NULL,
+    plan_code VARCHAR(3) NOT NULL UNIQUE,
+    plan_name VARCHAR(20) NOT NULL, // BRONCE - PLATA - ORO - PLATINO
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

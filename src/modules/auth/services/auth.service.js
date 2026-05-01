@@ -50,7 +50,8 @@ const login = async (req, res) => {
             message: 'OK',
             user: {
                 id: user.id,
-                role: user.role_name
+                role: user.role_name,
+                must_change_password: !!user.must_change_password
             }
         });
     } catch (error) {
@@ -62,8 +63,27 @@ const validatePassword = async (password, hash) => {
     return bcrypt.compare(password, hash);
 };
 
-const registerInternal = async (email) => {
-    const user = await authRepository.getUserByUsername(email);
+const changePassword = async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        const userId = req.user.id;
+
+        if (!newPassword) {
+            return res.status(400).json({ message: 'La nueva contraseña es requerida' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await authRepository.updateUserPassword(userId, hashedPassword);
+
+        return res.status(200).json({ message: 'Contraseña actualizada correctamente' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Error al cambiar la contraseña' });
+    }
+};
+
+const registerInternal = async (email, trx) => {
+    const user = await authRepository.getUserByUsername(email, trx);
 
     if (user) {
         throw new Error('El usuario ya existe');
@@ -72,15 +92,16 @@ const registerInternal = async (email) => {
     const defaultPassword = process.env.DEFAULT_USER_PASSWORD || 'clave123';
     const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
-    const newUser = await authRepository.createUser(email, hashedPassword);
+    const newUser = await authRepository.createUser(email, hashedPassword, trx);
 
-    const role = await authRepository.getRoleByRoleName('AFILIADO');
-    await authRepository.createUserRole(newUser[0].id, role.id);
+    const role = await authRepository.getRoleByRoleName('AFILIADO', trx);
+    await authRepository.createUserRole(newUser[0].id, role.id, trx);
 
     return newUser[0];
 };
 
 module.exports = {
     login,
-    registerInternal
+    registerInternal,
+    changePassword
 };

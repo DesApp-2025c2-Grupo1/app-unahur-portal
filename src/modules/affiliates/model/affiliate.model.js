@@ -1,6 +1,6 @@
 class AffiliateModel {
     constructor(reqBody) {
-        this.credencial_number = reqBody.credencial_number;
+        this.credencial_number = ""; //Se calcula en el momento de la creacio
         this.document_number = reqBody.document_number;
         this.document_type = reqBody.document_type;
         this.birth_date = reqBody.birth_date;
@@ -13,6 +13,7 @@ class AffiliateModel {
         this.province = reqBody.province;
         this.postal_code = reqBody.postal_code;
         this.country = reqBody.country;
+        this.plan_id = reqBody.plan_id;
         this.user_id = null;
     }
 }

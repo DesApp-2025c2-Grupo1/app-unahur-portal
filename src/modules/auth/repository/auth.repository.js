@@ -1,8 +1,8 @@
 const db = require('../../../database/db');
 
-const getUserByUsername = async (email) => {
+const getUserByUsername = async (email, trx = db) => {
     if (!email) return null;
-    return db('users')
+    return trx('users')
         .select('users.*', 'roles.role_name')
         .join('user_roles', 'users.id', 'user_roles.user_id')
         .join('roles', 'user_roles.role_id', 'roles.id')
@@ -10,27 +10,37 @@ const getUserByUsername = async (email) => {
         .first();
 }
 
-const createUser = async (email, password) => {
-    return db('users')
+const createUser = async (email, password, trx = db) => {
+    return trx('users')
         .insert({ email: email, password: password })
         .returning('*');
 }
 
 // metodos para la base de datos de roles
-const getRoleByRoleName = async (roleName) => {
+const getRoleByRoleName = async (roleName, trx = db) => {
     if (!roleName) return null;
-    return db('roles').where({ role_name: roleName }).first();
+    return trx('roles').where({ role_name: roleName }).first();
 }
 
 // lo inserta en la tabla de usuarios y roles
-const createUserRole = async (userId, roleId) => {
+const createUserRole = async (userId, roleId, trx = db) => {
     if (!userId || !roleId) return null;
-    return db('user_roles').insert({ user_id: userId, role_id: roleId }).returning('*');
+    return trx('user_roles').insert({ user_id: userId, role_id: roleId }).returning('*');
+}
+
+const updateUserPassword = async (userId, newPassword, trx = db) => {
+    return trx('users')
+        .where({ id: userId })
+        .update({ 
+            password: newPassword,
+            must_change_password: false 
+        });
 }
 
 module.exports = {
     getUserByUsername,
     createUser,
     getRoleByRoleName,
-    createUserRole
+    createUserRole,
+    updateUserPassword
 }

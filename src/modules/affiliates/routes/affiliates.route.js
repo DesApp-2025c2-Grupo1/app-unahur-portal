@@ -10,29 +10,6 @@ const authorize = require('../../auth/middleware/token.middleware');
 /**
  * @swagger
  * /affiliates:
- *   post:
- *     summary: Crea un nuevo afiliado
- *     tags: [Affiliates]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               document_number:
- *                 type: string
- *               document_type:
- *                 type: string
- *     responses:
- *       200:
- *         description: Afiliado creado correctamente
- */
-router.post('/', affiliatesService.createAffiliate);
-
-/**
- * @swagger
- * /affiliates:
  *   get:
  *     summary: Obtiene todos los afiliados por estado
  *     tags: [Affiliates]
@@ -109,5 +86,43 @@ router.put('/:id/activate', authorize('ADMIN'), affiliatesService.activateAffili
  *         description: Afiliado desactivado correctamente
  */
 router.put('/:id/deactivate', authorize('ADMIN'), affiliatesService.deactivateAffiliate);
+
+/**
+ * @swagger
+ * /affiliates:
+ *   post:
+ *     summary: Crea un nuevo afiliado
+ *     tags: [Affiliates]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               document_number:
+ *                 type: string
+ *               document_type:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Afiliado creado correctamente
+ */
+router.post('/', affiliatesService.createAffiliate);
+
+
+/**
+ * @swagger
+ * /affiliates:
+ *   get:
+ *     summary: Obtiene todos los afiliados
+ *     tags: [Affiliates]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Afiliados obtenidos correctamente
+ */
+router.get("/", authorize('AFIADO', 'ADMIN'), affiliatesService.getAllAffiliates);
 
 module.exports = router;

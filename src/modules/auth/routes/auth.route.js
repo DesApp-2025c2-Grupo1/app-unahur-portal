@@ -3,6 +3,7 @@ const router = express.Router();
 
 // service
 const authService = require('../services/auth.service');
+const authorize = require('../middleware/token.middleware');
 
 /**
  * @swagger
@@ -26,5 +27,7 @@ const authService = require('../services/auth.service');
  *         description: Sesión iniciada correctamente
  */
 router.post('/login', authService.login);
+
+router.post('/change-password', authorize('ADMIN', 'AFILIADO'), authService.changePassword);
 
 module.exports = router;
