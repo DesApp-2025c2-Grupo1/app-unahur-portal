@@ -50,6 +50,7 @@ const login = async (req, res) => {
             message: 'OK',
             user: {
                 id: user.id,
+                email: user.email,
                 role: user.role_name,
                 must_change_password: !!user.must_change_password
             }
@@ -82,6 +83,37 @@ const changePassword = async (req, res) => {
     }
 };
 
+const me = async (req, res) => {
+    try {
+        const user = await authRepository.getUserById(req.user.id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'Usuario no encontrado' });
+        }
+
+        return res.status(200).json({
+            user: {
+                id: user.id,
+                email: user.email,
+                role: user.role_name,
+                must_change_password: !!user.must_change_password
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ message: 'Error interno del servidor' });
+    }
+};
+
+const logout = async (req, res) => {
+    res.clearCookie('token', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+    });
+
+    return res.status(200).json({ message: 'OK' });
+};
+
 const registerInternal = async (email, trx) => {
     const user = await authRepository.getUserByUsername(email, trx);
 
@@ -102,6 +134,8 @@ const registerInternal = async (email, trx) => {
 
 module.exports = {
     login,
+    me,
+    logout,
     registerInternal,
     changePassword
 };

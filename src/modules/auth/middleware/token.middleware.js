@@ -2,7 +2,10 @@ const jwt = require('jsonwebtoken');
 
 const authorize = (...allowedRoles) => {
     return (req, res, next) => {
-        const token = req.cookies.token; //extraigo el token de la cookie
+        const bearerToken = req.headers.authorization?.startsWith('Bearer ')
+            ? req.headers.authorization.replace('Bearer ', '')
+            : null;
+        const token = req.cookies.token || bearerToken; //extraigo el token de la cookie o header
         if (!token) {
             return res.status(401).json({ error: 'Acceso denegado' });
         }

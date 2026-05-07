@@ -6,6 +6,7 @@ const affiliatesService = require('../services/affiliates.service');
 
 // middleware
 const authorize = require('../../auth/middleware/token.middleware');
+const upload = require('../../../middlewares/upload');
 
 /**
  * @swagger
@@ -108,7 +109,10 @@ router.put('/:id/deactivate', authorize('ADMIN'), affiliatesService.deactivateAf
  *       200:
  *         description: Afiliado creado correctamente
  */
-router.post('/', affiliatesService.createAffiliate);
+router.post('/', upload.fields([
+  { name: 'dni_document', maxCount: 1 },
+  { name: 'payslip_document', maxCount: 1 }
+]), affiliatesService.createAffiliate);
 
 
 /**

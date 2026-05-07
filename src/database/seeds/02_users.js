@@ -20,7 +20,7 @@ exports.seed = async function (knex) {
     },
     {
       id: 3,
-      email: 'proveedor@test.com',
+      email: 'prestador@test.com',
       password: '$2a$12$TCWUqRe9RYYBiAiO5kk8.uryyCnIFVKymY7Jm41Lu8RC2tpWB0ij.'
     }
   ]);
