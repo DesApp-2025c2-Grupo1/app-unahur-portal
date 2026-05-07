@@ -12,9 +12,14 @@ class AffiliateModel {
         this.city = reqBody.city;
         this.province = reqBody.province;
         this.postal_code = reqBody.postal_code;
-        this.country = reqBody.country;
+        this.country = reqBody.country || null;
         this.plan_id = reqBody.plan_id;
         this.user_id = null;
+        this.status = false;
+
+        // Attach document paths if provided dynamically
+        if (reqBody.dni_document_path) this.dni_document_path = reqBody.dni_document_path;
+        if (reqBody.payslip_document_path) this.payslip_document_path = reqBody.payslip_document_path;
     }
 }
 

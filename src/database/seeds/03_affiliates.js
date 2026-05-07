@@ -22,6 +22,7 @@ exports.seed = async function (knex) {
             province: 'Buenos Aires',
             postal_code: '1686',
             country: 'Argentina',
+            status: true,
             plan_id: 1,
             created_at: new Date(),
             updated_at: new Date()

@@ -13,12 +13,14 @@ const mailConfig = {
 const transporter = nodemailer.createTransport(mailConfig);
 
 // Verificar la conexión al inicio
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('Error al conectar con el servidor SMTP:', error);
-  } else {
-    console.log('Servidor SMTP listo para enviar correos');
-  }
-});
+if (process.env.NODE_ENV !== 'test') {
+  transporter.verify((error) => {
+    if (error) {
+      console.error('Error al conectar con el servidor SMTP:', error);
+    } else {
+      console.log('Servidor SMTP listo para enviar correos');
+    }
+  });
+}
 
 module.exports = transporter;

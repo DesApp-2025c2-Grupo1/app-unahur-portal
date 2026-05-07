@@ -6,13 +6,33 @@ const { affiliateSchema } = require('../utils/validation');
 const db = require('../../../database/db');
 
 const createAffiliate = async (req, res) => {
+  // If family_group is string (sent from FormData), parse it
+  if (req.body.family_group && typeof req.body.family_group === 'string') {
+    try {
+      req.body.family_group = JSON.parse(req.body.family_group);
+    } catch (e) {
+      // Ignore if not parseable, Joi will handle validation error
+    }
+  }
+
   // 1. Validar el input
   const { error, value } = affiliateSchema.validate(req.body);
   if (error) {
+    console.error("Joi Validation Error:", error.details);
     return res.status(400).json({ message: 'Datos inválidos', details: error.details });
   }
 
   const affiliate = new affiliateModel(value);
+
+  // Attach document paths if uploaded
+  if (req.files) {
+    if (req.files.dni_document && req.files.dni_document[0]) {
+      affiliate.dni_document_path = `/uploads/${req.files.dni_document[0].filename}`;
+    }
+    if (req.files.payslip_document && req.files.payslip_document[0]) {
+      affiliate.payslip_document_path = `/uploads/${req.files.payslip_document[0].filename}`;
+    }
+  }
 
   // 2. Iniciar Transacción
   const trx = await db.transaction();

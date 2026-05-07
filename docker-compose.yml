@@ -1,5 +1,7 @@
 services:
   app-unahur-portal:
+    profiles:
+      - app
     build: .
     image: unahur/app-portal:1.0
     container_name: app-unahur-portal
@@ -39,6 +41,8 @@ services:
       - ms-unahur-portal-network
 
   app-unahur-pgadmin:
+    profiles:
+      - tools
     image: dpage/pgadmin4
     container_name: app-unahur-pgadmin
     ports:
