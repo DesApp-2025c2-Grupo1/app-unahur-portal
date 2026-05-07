@@ -123,6 +123,6 @@ router.post('/', affiliatesService.createAffiliate);
  *       200:
  *         description: Afiliados obtenidos correctamente
  */
-router.get("/", authorize('AFIADO', 'ADMIN'), affiliatesService.getAllAffiliates);
+router.get("/", authorize('AFILIADO', 'ADMIN'), affiliatesService.getAllAffiliates);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const affiliatesService = require('../services/affiliates.service');
+const authorize = require('../../auth/middleware/token.middleware');
 
 
 /**
@@ -22,7 +23,7 @@ const affiliatesService = require('../services/affiliates.service');
  *       200:
  *         description: Grupo familiar eliminado correctamente
  */
-router.delete("/:id", authorize('AFIADO'), affiliatesService.deleteFamilyGroup);
+router.delete("/:id", authorize('AFILIADO'), affiliatesService.deleteFamilyGroup);
 
 /**
  * @swagger
@@ -42,6 +43,6 @@ router.delete("/:id", authorize('AFIADO'), affiliatesService.deleteFamilyGroup);
  *       200:
  *         description: Grupo familiar obtenido correctamente
  */
-router.get("/:id", authorize('AFIADO'), affiliatesService.getFamilyGroupById)
+router.get("/:id", authorize('AFILIADO'), affiliatesService.getFamilyGroupById)
 
 module.exports = router;

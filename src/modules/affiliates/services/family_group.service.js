@@ -1,6 +1,6 @@
 const familyGroupRepository = require('../repository/family_group.repository');
 
-const createFamilyGroup = async (res, req) => {
+const createFamilyGroup = async (req, res) => {
     const { affiliate_id, holder_credential_number } = req.body;
     await familyGroupRepository.createFamilyGroup(affiliate_id, increaseCredencialNumber(holder_credential_number));
     return res.status(201).json({ message: 'Grupo familiar creado exitosamente' });

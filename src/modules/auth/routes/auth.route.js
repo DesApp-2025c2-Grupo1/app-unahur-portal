@@ -30,4 +30,9 @@ router.post('/login', authService.login);
 
 router.post('/change-password', authorize('ADMIN', 'AFILIADO'), authService.changePassword);
 
+router.post('/logout', (req, res) => {
+    res.clearCookie('token');
+    res.status(200).json({ message: 'Sesión cerrada correctamente' });
+});
+
 module.exports = router;

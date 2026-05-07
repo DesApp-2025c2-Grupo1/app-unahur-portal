@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const affiliate_stateService = require('../services/affiliate_state.service');
+const authorize = require('../../auth/middleware/token.middleware');
 
 /**
  * @swagger
