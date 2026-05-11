@@ -30,4 +30,12 @@ exports.seed = async function (knex) {
     { user_id: 2, role_id: 2 },
     { user_id: 3, role_id: 3 }
   ]);
+
+  await knex.raw(`
+    SELECT setval(
+      pg_get_serial_sequence('users', 'id'),
+      (SELECT COALESCE(MAX(id), 1) FROM users),
+      true
+    )
+  `);
 };
