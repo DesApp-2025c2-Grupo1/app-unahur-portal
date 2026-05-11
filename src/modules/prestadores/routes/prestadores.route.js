@@ -3,7 +3,10 @@ const router = express.Router();
 
 const prestadoresService = require('../services/prestadores.service');
 const adminProvidersService = require('../services/admin.providers.service');
+<<<<<<< HEAD
 const authorize = require('../../auth/middleware/token.middleware');
+=======
+>>>>>>> 6154655138dc766b6168d5025a9e90b0d3ab704e
 
 router.post('/login', prestadoresService.login);
 router.post('/prestadores/login', prestadoresService.login);
