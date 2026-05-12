@@ -1,5 +1,23 @@
 const db = require('../../../database/db');
 
+const getActorUserId = (req) => req.user?.id || req.user?.id_usuario || req.user?.userId || null;
+
+const createPrestadorAuditLog = async (trx, req, { prestadorId, action, reason = null, metadata = {} }) => {
+  if (!prestadorId) return;
+
+  await trx('prestador_audit_logs').insert({
+    prestador_id: prestadorId,
+    admin_user_id: getActorUserId(req),
+    action,
+    reason: reason || null,
+    metadata: JSON.stringify({
+      actorRole: req.user?.role || null,
+      ...metadata
+    }),
+    created_at: trx.fn.now()
+  });
+};
+
 const serializeAgenda = async (a) => {
   const p = await db('prestadores').where('id', a.prestador_id).first();
   const esp = await db('especialidades').where('id', a.especialidad_id).first();
@@ -72,17 +90,32 @@ const create = async (req, res) => {
     const p = await db('prestadores').where('cuit', cuitCuil).first();
     if (!p) return res.status(404).json({ error: 'Prestador no encontrado' });
 
-    const [newId] = await db('agendas').insert({
-      prestador_id: p.id,
-      especialidad_id: idEspecialidad,
-      lugar_id: idLugar,
-      duracion_turno: duracionTurno || 30,
-      fecha_inicio: fechaInicio || null,
-      fecha_fin: fechaFin || null,
-      bloques: JSON.stringify(bloques || [])
-    }).returning('id');
-    
-    const id = newId.id || newId;
+    const id = await db.transaction(async (trx) => {
+      const [newId] = await trx('agendas').insert({
+        prestador_id: p.id,
+        especialidad_id: idEspecialidad,
+        lugar_id: idLugar,
+        duracion_turno: duracionTurno || 30,
+        fecha_inicio: fechaInicio || null,
+        fecha_fin: fechaFin || null,
+        bloques: JSON.stringify(bloques || [])
+      }).returning('id');
+
+      const agendaId = newId.id || newId;
+      await createPrestadorAuditLog(trx, req, {
+        prestadorId: p.id,
+        action: 'agenda_create',
+        metadata: {
+          agendaId,
+          idEspecialidad,
+          idLugar,
+          duracionTurno: duracionTurno || 30,
+          fechaInicio: fechaInicio || null,
+          fechaFin: fechaFin || null
+        }
+      });
+      return agendaId;
+    });
 
     const created = await db('agendas').where('id', id).first();
     return res.status(201).json(await serializeAgenda(created));
@@ -110,7 +143,18 @@ const update = async (req, res) => {
     if (bloques) updateData.bloques = JSON.stringify(bloques);
 
     if (Object.keys(updateData).length > 0) {
-      await db('agendas').where('id', req.params.id).update(updateData);
+      await db.transaction(async (trx) => {
+        await trx('agendas').where('id', req.params.id).update(updateData);
+        await createPrestadorAuditLog(trx, req, {
+          prestadorId: updateData.prestador_id || a.prestador_id,
+          action: 'agenda_update',
+          metadata: {
+            agendaId: a.id,
+            previousPrestadorId: a.prestador_id,
+            changedFields: Object.keys(updateData)
+          }
+        });
+      });
     }
     
     const updated = await db('agendas').where('id', req.params.id).first();
@@ -125,8 +169,15 @@ const remove = async (req, res) => {
     const a = await db('agendas').where('id', req.params.id).first();
     if (!a) return res.status(404).json({ error: 'Agenda not found' });
 
-    // soft delete or hard delete depending on what frontend expects. We do hard delete for now.
-    await db('agendas').where('id', req.params.id).del();
+    await db.transaction(async (trx) => {
+      await trx('agendas').where('id', req.params.id).del();
+      await createPrestadorAuditLog(trx, req, {
+        prestadorId: a.prestador_id,
+        action: 'agenda_delete',
+        reason: req.body?.motivo || null,
+        metadata: { agendaId: a.id }
+      });
+    });
     return res.status(200).json({ message: 'Deleted' });
   } catch (e) {
     return res.status(500).json({ error: e.message });

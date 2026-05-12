@@ -177,6 +177,32 @@ const findPrestadorByCuitOrThrow = async (trx, cuit) => {
 
 const providerDisplayName = (p) => `${p.first_name} ${p.last_name}`.trim();
 
+const getAdminUserId = (req) => req.user?.id || req.user?.id_usuario || req.user?.userId || null;
+
+const normalizeReason = (value) => String(value || '').trim();
+
+const requireReason = (value, actionLabel) => {
+  const motivo = normalizeReason(value);
+  if (!motivo) {
+    throw new HttpError(400, `El motivo es requerido para ${actionLabel}`, [{
+      field: 'motivo',
+      message: `El motivo es requerido para ${actionLabel}`
+    }]);
+  }
+  return motivo;
+};
+
+const createAuditLog = async (trx, { prestadorId, adminUserId, action, reason = null, metadata = {} }) => {
+  await trx('prestador_audit_logs').insert({
+    prestador_id: prestadorId,
+    admin_user_id: adminUserId,
+    action,
+    reason: reason || null,
+    metadata: JSON.stringify(metadata || {}),
+    created_at: trx.fn.now()
+  });
+};
+
 const generateTemporaryPassword = () => {
   const token = crypto.randomBytes(4).toString('hex');
   return `Medi-${token}`;
@@ -397,6 +423,19 @@ const getByCuit = async (req, res) => {
   }
 };
 
+const getOwnProfile = async (req, res) => {
+  try {
+    const userId = req.user?.id || req.user?.id_usuario || req.user?.userId;
+    const p = await db('prestadores').where('user_id', userId).first();
+    if (!p) return res.status(404).json({ error: 'Prestador no encontrado', message: 'Prestador no encontrado' });
+
+    const result = await serializePrestador(p, db, { includeDetail: true });
+    return res.status(200).json(result);
+  } catch (error) {
+    return sendError(res, error, 'Error getOwnProfile:');
+  }
+};
+
 const create = async (req, res) => {
   try {
     const validated = validateProviderPayload(req.body);
@@ -459,6 +498,16 @@ const create = async (req, res) => {
         cp: String(lugar.cp || '').trim(),
         horarios: JSON.stringify(parseJsonArray(lugar.horarios))
       })));
+
+      await createAuditLog(trx, {
+        prestadorId,
+        adminUserId: getAdminUserId(req),
+        action: 'create',
+        metadata: {
+          cuit: validated.cleanCuit,
+          tipoPrestador: validated.tipoPrestador
+        }
+      });
 
       const created = await trx('prestadores').where('id', prestadorId).first();
       return serializePrestador(created, trx, { includeDetail: true });
@@ -565,6 +614,18 @@ const update = async (req, res) => {
         })));
       }
 
+      const changedFields = Object.keys(req.body).filter((field) => field !== 'confirmAgendaImpact');
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: req.body.confirmAgendaImpact ? 'update_with_agenda_impact' : 'update',
+        reason: normalizeReason(req.body.motivo) || null,
+        metadata: {
+          changedFields,
+          confirmAgendaImpact: !!req.body.confirmAgendaImpact
+        }
+      });
+
       const updated = await trx('prestadores').where('id', p.id).first();
       return serializePrestador(updated, trx, { includeDetail: true });
     });
@@ -577,13 +638,22 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
-    const p = await findPrestadorByCuitOrThrow(db, req.params.cuit);
-    await db('prestadores').where('id', p.id).update({
-      estado: 'baja',
-      status: false,
-      deactivated_at: db.fn.now(),
-      deactivation_reason: req.body?.motivo || null,
-      updated_at: db.fn.now()
+    const motivo = requireReason(req.body?.motivo, 'dar de baja un prestador');
+    await db.transaction(async (trx) => {
+      const p = await findPrestadorByCuitOrThrow(trx, req.params.cuit);
+      await trx('prestadores').where('id', p.id).update({
+        estado: 'baja',
+        status: false,
+        deactivated_at: trx.fn.now(),
+        deactivation_reason: motivo,
+        updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'deactivate',
+        reason: motivo
+      });
     });
     return res.status(204).send();
   } catch (error) {
@@ -593,15 +663,24 @@ const remove = async (req, res) => {
 
 const suspend = async (req, res) => {
   try {
-    const p = await findPrestadorByCuitOrThrow(db, req.params.cuit);
-    await db('prestadores').where('id', p.id).update({
-      estado: 'suspendido',
-      status: false,
-      suspended_at: db.fn.now(),
-      suspension_reason: req.body?.motivo || null,
-      updated_at: db.fn.now()
+    const motivo = requireReason(req.body?.motivo, 'suspender un prestador');
+    const updated = await db.transaction(async (trx) => {
+      const p = await findPrestadorByCuitOrThrow(trx, req.params.cuit);
+      await trx('prestadores').where('id', p.id).update({
+        estado: 'suspendido',
+        status: false,
+        suspended_at: trx.fn.now(),
+        suspension_reason: motivo,
+        updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'suspend',
+        reason: motivo
+      });
+      return trx('prestadores').where('id', p.id).first();
     });
-    const updated = await db('prestadores').where('id', p.id).first();
     return res.status(200).json(await serializePrestador(updated, db, { includeDetail: true }));
   } catch (error) {
     return sendError(res, error, 'Error suspend provider:');
@@ -610,17 +689,26 @@ const suspend = async (req, res) => {
 
 const reactivate = async (req, res) => {
   try {
-    const p = await findPrestadorByCuitOrThrow(db, req.params.cuit);
-    await db('prestadores').where('id', p.id).update({
-      estado: 'activo',
-      status: true,
-      deactivated_at: null,
-      deactivation_reason: null,
-      suspended_at: null,
-      suspension_reason: null,
-      updated_at: db.fn.now()
+    const motivo = normalizeReason(req.body?.motivo);
+    const updated = await db.transaction(async (trx) => {
+      const p = await findPrestadorByCuitOrThrow(trx, req.params.cuit);
+      await trx('prestadores').where('id', p.id).update({
+        estado: 'activo',
+        status: true,
+        deactivated_at: null,
+        deactivation_reason: null,
+        suspended_at: null,
+        suspension_reason: null,
+        updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'reactivate',
+        reason: motivo || null
+      });
+      return trx('prestadores').where('id', p.id).first();
     });
-    const updated = await db('prestadores').where('id', p.id).first();
     return res.status(200).json(await serializePrestador(updated, db, { includeDetail: true }));
   } catch (error) {
     return sendError(res, error, 'Error reactivate provider:');
@@ -629,12 +717,21 @@ const reactivate = async (req, res) => {
 
 const forcePasswordChange = async (req, res) => {
   try {
-    const p = await findPrestadorByCuitOrThrow(db, req.params.cuit);
-    await db('users').where({ id: p.user_id }).update({
-      must_change_password: true,
-      updated_at: db.fn.now()
+    const motivo = normalizeReason(req.body?.motivo);
+    const updated = await db.transaction(async (trx) => {
+      const p = await findPrestadorByCuitOrThrow(trx, req.params.cuit);
+      await trx('users').where({ id: p.user_id }).update({
+        must_change_password: true,
+        updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'force_password_change',
+        reason: motivo || null
+      });
+      return trx('prestadores').where('id', p.id).first();
     });
-    const updated = await db('prestadores').where('id', p.id).first();
     return res.status(200).json(await serializePrestador(updated, db, { includeDetail: true }));
   } catch (error) {
     return sendError(res, error, 'Error force password change:');
@@ -660,6 +757,13 @@ const resetPassword = async (req, res) => {
         credentials_sent_at: trx.fn.now(),
         password_reset_at: trx.fn.now(),
         updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'reset_password',
+        reason: normalizeReason(req.body?.motivo) || null,
+        metadata: { credentialsSent: true }
       });
     });
 
@@ -692,14 +796,56 @@ const resendCredentials = async (req, res) => {
       cuit: p.cuit
     });
 
-    await db('prestadores').where({ id: p.id }).update({
-      credentials_sent_at: db.fn.now(),
-      updated_at: db.fn.now()
+    await db.transaction(async (trx) => {
+      await trx('prestadores').where({ id: p.id }).update({
+        credentials_sent_at: trx.fn.now(),
+        updated_at: trx.fn.now()
+      });
+      await createAuditLog(trx, {
+        prestadorId: p.id,
+        adminUserId: getAdminUserId(req),
+        action: 'resend_credentials',
+        reason: normalizeReason(req.body?.motivo) || null
+      });
     });
 
     return res.status(200).json({ message: 'Credenciales reenviadas' });
   } catch (error) {
     return sendError(res, error, 'Error resend provider credentials:');
+  }
+};
+
+const getAuditLogs = async (req, res) => {
+  try {
+    const p = await findPrestadorByCuitOrThrow(db, req.params.cuit);
+    const logs = await db('prestador_audit_logs')
+      .leftJoin('users', 'prestador_audit_logs.admin_user_id', 'users.id')
+      .where('prestador_audit_logs.prestador_id', p.id)
+      .select(
+        'prestador_audit_logs.id',
+        'prestador_audit_logs.action',
+        'prestador_audit_logs.reason',
+        'prestador_audit_logs.metadata',
+        'prestador_audit_logs.created_at',
+        'prestador_audit_logs.admin_user_id',
+        'users.email as admin_email'
+      )
+      .orderBy('prestador_audit_logs.created_at', 'desc')
+      .orderBy('prestador_audit_logs.id', 'desc');
+
+    return res.status(200).json(logs.map((log) => ({
+      id: log.id,
+      action: log.action,
+      reason: log.reason,
+      metadata: typeof log.metadata === 'string' ? JSON.parse(log.metadata || '{}') : log.metadata,
+      createdAt: log.created_at,
+      admin: log.admin_user_id ? {
+        id: log.admin_user_id,
+        email: log.admin_email
+      } : null
+    })));
+  } catch (error) {
+    return sendError(res, error, 'Error get provider audit logs:');
   }
 };
 
@@ -736,6 +882,7 @@ const getAgendasByPlaces = async (req, res) => {
 module.exports = {
   getAll,
   getByCuit,
+  getOwnProfile,
   create,
   update,
   remove,
@@ -744,6 +891,7 @@ module.exports = {
   forcePasswordChange,
   resetPassword,
   resendCredentials,
+  getAuditLogs,
   getAgendasBySpecialty,
   getAgendasByPlaces
 };

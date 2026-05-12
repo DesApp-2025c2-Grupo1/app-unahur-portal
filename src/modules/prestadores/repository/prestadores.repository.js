@@ -1,5 +1,16 @@
 const db = require('../../../database/db');
 
+const parseJsonArray = (value) => {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const getPrestadorByCuit = async (cuit, trx = db) => {
   return trx('prestadores')
     .select(
@@ -44,25 +55,40 @@ const getRequests = async (prestadorId, trx = db) => {
     .orderBy('id', 'desc');
 };
 
-const updateRequestStatus = async (id, status, trx = db) => {
+const getRequestByIdForPrestador = async (id, prestadorId, trx = db) => {
+  return trx('prestador_requests').where({ id, prestador_id: prestadorId }).first();
+};
+
+const updateRequestStatus = async (id, prestadorId, status, reason, userId, trx = db) => {
   const [request] = await trx('prestador_requests')
-    .where({ id })
-    .update({ status, updated_at: trx.fn.now() })
+    .where({ id, prestador_id: prestadorId })
+    .update({
+      status,
+      status_reason: reason || null,
+      resolved_by_user_id: ['Aprobada', 'Rechazada'].includes(status) ? userId : null,
+      resolved_at: ['Aprobada', 'Rechazada'].includes(status) ? trx.fn.now() : null,
+      updated_at: trx.fn.now()
+    })
     .returning('*');
 
   return request;
 };
 
 const createRequest = async (prestadorId, data, trx = db) => {
+  const requestNumber = data.nro || `SOL-${Date.now()}`;
   const [request] = await trx('prestador_requests')
     .insert({
       prestador_id: prestadorId,
-      request_number: data.nro,
+      affiliate_id: data.affiliateId || null,
+      request_number: requestNumber,
       affiliate_name: data.afiliado,
       type: data.tipo,
-      status: data.estado,
+      status: data.estado || 'Pendiente',
       request_date: data.fecha,
       description: data.descripcion,
+      attachment_name: data.adjunto?.nombre || null,
+      attachment_type: data.adjunto?.tipo || null,
+      attachment_size: data.adjunto?.tamanio || null,
     })
     .returning('*');
 
@@ -89,22 +115,77 @@ const createAppointment = async (prestadorId, data, trx = db) => {
   const [appointment] = await trx('prestador_appointments')
     .insert({
       prestador_id: prestadorId,
+      affiliate_id: data.affiliateId,
+      agenda_id: data.agendaId || null,
+      especialidad_id: data.especialidadId || null,
+      lugar_id: data.lugarId || null,
       affiliate_name: data.afiliado,
       appointment_date: data.date,
       start_time: data.horaIni,
       end_time: data.horaFin,
       reason: data.motivo,
       note: data.notas || null,
+      status: data.estado || 'reservado',
     })
     .returning('*');
 
   return appointment;
 };
 
+const findAgendaForAppointment = async (prestadorId, date, startTime, endTime, trx = db) => {
+  const agendas = await trx('agendas')
+    .where({ prestador_id: prestadorId, esta_activo: true })
+    .andWhere((builder) => {
+      builder.whereNull('fecha_inicio').orWhere('fecha_inicio', '<=', date);
+    })
+    .andWhere((builder) => {
+      builder.whereNull('fecha_fin').orWhere('fecha_fin', '>=', date);
+    });
+
+  const day = new Date(`${date}T00:00:00`).getDay();
+  return agendas.find((agenda) => {
+    const bloques = parseJsonArray(agenda.bloques);
+    return bloques.some((bloque) => {
+      const dias = (bloque.dias || []).map(Number);
+      if (dias.length > 0 && !dias.includes(day)) return false;
+      return String(bloque.desde || '') <= startTime && String(bloque.hasta || '') >= endTime;
+    });
+  }) || null;
+};
+
+const hasOverlappingAppointment = async (prestadorId, date, startTime, endTime, ignoreId = null, trx = db) => {
+  const query = trx('prestador_appointments')
+    .where({ prestador_id: prestadorId, appointment_date: date })
+    .whereNotIn('status', ['cancelado'])
+    .andWhere('start_time', '<', endTime)
+    .andWhere('end_time', '>', startTime);
+
+  if (ignoreId) query.whereNot('id', ignoreId);
+  return !!await query.first();
+};
+
 const updateAppointmentNote = async (id, note, trx = db) => {
   const [appointment] = await trx('prestador_appointments')
     .where({ id })
     .update({ note, updated_at: trx.fn.now() })
+    .returning('*');
+
+  return appointment;
+};
+
+const updateAppointmentStatus = async (id, prestadorId, data, trx = db) => {
+  const patch = {
+    status: data.estado,
+    updated_at: trx.fn.now()
+  };
+
+  if (data.nota !== undefined) patch.note = data.nota;
+  if (data.motivoCancelacion !== undefined) patch.cancellation_reason = data.motivoCancelacion || null;
+  if (data.estado === 'atendido') patch.attended_at = trx.fn.now();
+
+  const [appointment] = await trx('prestador_appointments')
+    .where({ id, prestador_id: prestadorId })
+    .update(patch)
     .returning('*');
 
   return appointment;
@@ -131,6 +212,32 @@ const getClinicalHistoryByAffiliate = async (affiliateId, trx = db) => {
     .orderBy('id', 'desc');
 };
 
+const createClinicalHistoryEntry = async (affiliateId, prestadorId, data, trx = db) => {
+  const prestador = await trx('prestadores').where({ id: prestadorId }).first();
+  const specialty = data.especialidad || await trx('prestador_especialidades')
+    .join('especialidades', 'prestador_especialidades.especialidad_id', 'especialidades.id')
+    .where('prestador_especialidades.prestador_id', prestadorId)
+    .select('especialidades.nombre')
+    .first();
+
+  const doctor = data.doctor || `${prestador.first_name} ${prestador.last_name}`.trim();
+  const [entry] = await trx('prestador_clinical_history')
+    .insert({
+      affiliate_id: affiliateId,
+      prestador_id: prestadorId,
+      appointment_id: data.turnoId || null,
+      entry_date: data.fecha,
+      doctor,
+      specialty: typeof specialty === 'string' ? specialty : specialty?.nombre || 'Sin especialidad',
+      modality: data.modalidad || 'Consulta',
+      note: data.nota,
+      own_note: true,
+    })
+    .returning('*');
+
+  return entry;
+};
+
 const getSituationTypes = async (trx = db) => {
   return trx('prestador_situation_types').select('id', 'name').orderBy('name');
 };
@@ -146,10 +253,13 @@ const createSituation = async (affiliateId, data, trx = db) => {
   const [situation] = await trx('prestador_affiliate_situations')
     .insert({
       affiliate_id: affiliateId,
+      prestador_id: data.prestadorId || null,
       type: data.tipo,
       start_date: data.fechaInicio,
       end_date: data.fechaFin || null,
       active: data.activa !== false,
+      observation: data.observacion || null,
+      end_reason: data.motivoFinalizacion || null,
     })
     .returning('*');
 
@@ -165,6 +275,8 @@ const updateSituation = async (affiliateId, situationId, data, trx = db) => {
   if (data.fechaInicio !== undefined) patch.start_date = data.fechaInicio;
   if (data.fechaFin !== undefined) patch.end_date = data.fechaFin || null;
   if (data.activa !== undefined) patch.active = data.activa;
+  if (data.observacion !== undefined) patch.observation = data.observacion || null;
+  if (data.motivoFinalizacion !== undefined) patch.end_reason = data.motivoFinalizacion || null;
 
   const [situation] = await trx('prestador_affiliate_situations')
     .where({ id: situationId, affiliate_id: affiliateId })
@@ -172,6 +284,34 @@ const updateSituation = async (affiliateId, situationId, data, trx = db) => {
     .returning('*');
 
   return situation;
+};
+
+const findActiveSituation = async (affiliateId, type, prestadorId, ignoreId = null, trx = db) => {
+  const query = trx('prestador_affiliate_situations')
+    .where({ affiliate_id: affiliateId, type, active: true })
+    .andWhere((builder) => {
+      builder.whereNull('prestador_id').orWhere('prestador_id', prestadorId);
+    });
+
+  if (ignoreId) query.whereNot('id', ignoreId);
+  return query.first();
+};
+
+const getAffiliateById = async (affiliateId, trx = db) => {
+  return trx('affiliates').where({ id: affiliateId }).first();
+};
+
+const createWorkflowAuditLog = async (trx, { prestadorId, affiliateId = null, userId = null, module, action, reason = null, metadata = {} }) => {
+  await trx('prestador_workflow_audit_logs').insert({
+    prestador_id: prestadorId,
+    affiliate_id: affiliateId,
+    user_id: userId,
+    module,
+    action,
+    reason: reason || null,
+    metadata: JSON.stringify(metadata || {}),
+    created_at: trx.fn.now()
+  });
 };
 
 const deleteSituation = async (affiliateId, situationId, trx = db) => {
@@ -202,19 +342,27 @@ module.exports = {
   getDefaultPrestador,
   getDashboardStats,
   getRequests,
+  getRequestByIdForPrestador,
   updateRequestStatus,
   createRequest,
   getAppointmentsByDate,
   getAppointmentsByMonth,
   createAppointment,
+  findAgendaForAppointment,
+  hasOverlappingAppointment,
   updateAppointmentNote,
+  updateAppointmentStatus,
   searchAffiliates,
   getClinicalHistoryByAffiliate,
+  createClinicalHistoryEntry,
   getSituationTypes,
   getSituationsByAffiliate,
   createSituation,
   updateSituation,
   deleteSituation,
+  findActiveSituation,
+  getAffiliateById,
+  createWorkflowAuditLog,
   getNotifications,
   markNotificationAsRead,
 };
