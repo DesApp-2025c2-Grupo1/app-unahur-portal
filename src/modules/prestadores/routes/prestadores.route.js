@@ -3,24 +3,10 @@ const router = express.Router();
 
 const prestadoresService = require('../services/prestadores.service');
 const adminProvidersService = require('../services/admin.providers.service');
-<<<<<<< HEAD
 const authorize = require('../../auth/middleware/token.middleware');
-=======
->>>>>>> 6154655138dc766b6168d5025a9e90b0d3ab704e
 
 router.post('/login', prestadoresService.login);
 router.post('/prestadores/login', prestadoresService.login);
-
-// Admin Providers CRUD
-router.get('/', authorize('ADMIN'), adminProvidersService.getAll);
-router.get('/:cuit', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getByCuit);
-router.post('/', authorize('ADMIN'), adminProvidersService.create);
-router.put('/:cuit', authorize('ADMIN'), adminProvidersService.update);
-router.delete('/:cuit', authorize('ADMIN'), adminProvidersService.remove);
-
-// Agendas util for providers
-router.get('/:cuit/agendas-by-specialty', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getAgendasBySpecialty);
-router.get('/:cuit/agendas-by-places', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getAgendasByPlaces);
 
 router.get('/dashboard/stats', authorize('PRESTADOR'), prestadoresService.getDashboardStats);
 
@@ -45,5 +31,19 @@ router.get('/situaciones/afiliado/:affiliateId', authorize('PRESTADOR', 'ADMIN')
 router.post('/situaciones/afiliado/:affiliateId', authorize('PRESTADOR'), prestadoresService.createSituation);
 router.put('/situaciones/afiliado/:affiliateId/:situationId', authorize('PRESTADOR'), prestadoresService.updateSituation);
 router.delete('/situaciones/afiliado/:affiliateId/:situationId', authorize('PRESTADOR'), prestadoresService.deleteSituation);
+
+// Admin Providers CRUD
+router.get('/', authorize('ADMIN'), adminProvidersService.getAll);
+router.post('/', authorize('ADMIN'), adminProvidersService.create);
+router.put('/:cuit/suspend', authorize('ADMIN'), adminProvidersService.suspend);
+router.put('/:cuit/reactivate', authorize('ADMIN'), adminProvidersService.reactivate);
+router.post('/:cuit/reset-password', authorize('ADMIN'), adminProvidersService.resetPassword);
+router.post('/:cuit/resend-credentials', authorize('ADMIN'), adminProvidersService.resendCredentials);
+router.post('/:cuit/force-password-change', authorize('ADMIN'), adminProvidersService.forcePasswordChange);
+router.get('/:cuit/agendas-by-specialty', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getAgendasBySpecialty);
+router.get('/:cuit/agendas-by-places', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getAgendasByPlaces);
+router.get('/:cuit', authorize('ADMIN', 'PRESTADOR'), adminProvidersService.getByCuit);
+router.put('/:cuit', authorize('ADMIN'), adminProvidersService.update);
+router.delete('/:cuit', authorize('ADMIN'), adminProvidersService.remove);
 
 module.exports = router;

@@ -133,8 +133,13 @@ const login = async (req, res) => {
 
     const prestador = await prestadoresRepository.getPrestadorByCuit(cuit);
 
-    if (!prestador || !prestador.status) {
+    if (!prestador) {
       return res.status(401).json({ message: 'CUIT o contraseña incorrectos' });
+    }
+
+    const providerState = prestador.estado || (prestador.status ? 'activo' : 'baja');
+    if (providerState !== 'activo') {
+      return res.status(403).json({ message: 'La cuenta del prestador no se encuentra activa. Contactá a administración.' });
     }
 
     const isPasswordValid = await bcrypt.compare(password, prestador.password);
