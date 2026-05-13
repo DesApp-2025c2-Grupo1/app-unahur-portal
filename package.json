@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
+    "test:report": "jest --verbose --coverage",
     "dev": "node --watch ./src/server.js",
     "migrate": "knex migrate:latest",
     "rollback": "knex migrate:rollback",

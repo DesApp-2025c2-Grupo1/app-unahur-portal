@@ -1,95 +1,87 @@
-require('dotenv').config();
 const request = require('supertest');
 const app = require('../index');
-const usuariosService = require('../modules/affiliates/services/usuarios.service');
+const affiliateRepository = require('../modules/affiliates/repository/affiliate.repository');
+const jwt = require('jsonwebtoken');
 
-jest.mock('../modules/affiliates/services/usuarios.service');
+jest.mock('../modules/affiliates/repository/affiliate.repository');
+jest.mock('jsonwebtoken');
 
-describe('Usuarios Endpoints', () => {
-  const mockUser = {
-    id_usuario: 1,
-    email: 'test@example.com',
-    nombre: 'Test',
-    apellido: 'User',
-    activo: true,
-    fecha_creacion: new Date().toISOString(),
-    roles: [{ id_rol: 1, nombre_rol: 'Afiliado' }]
+describe('Affiliates Endpoints', () => {
+  const mockAffiliate = {
+    id: 1,
+    first_name: 'Juan',
+    last_name: 'López',
+    email: 'juan@example.com',
+    document_number: '12345678',
+    document_type: 'DNI',
+    status: true
   };
+
+  beforeEach(() => {
+    // Simula un token válido con rol ADMIN para rutas protegidas
+    jwt.verify.mockReturnValue({ id: 1, email: 'admin@example.com', role: 'ADMIN' });
+  });
 
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  describe('GET /affiliates/usuarios/:id_usuario', () => {
-    it('should return 200 with user data when user exists', async () => {
-      usuariosService.getUserById.mockResolvedValue(mockUser);
-      const res = await request(app).get('/affiliates/usuarios/1');
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toEqual(mockUser);
-    });
+  describe('GET /affiliates/:id', () => {
+    it('should return 200 with affiliate data when affiliate exists', async () => {
+      affiliateRepository.getAffiliateById.mockResolvedValue(mockAffiliate);
 
-    it('should return 400 when id_usuario is not an integer', async () => {
-      const res = await request(app).get('/affiliates/usuarios/invalid');
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('should return 404 when user does not exist', async () => {
-      usuariosService.getUserById.mockResolvedValue(null);
-      const res = await request(app).get('/affiliates/usuarios/99999');
-      expect(res.statusCode).toBe(404);
-    });
-  });
-
-  describe('GET /affiliates/usuarios', () => {
-    it('should return 200 with paginated users', async () => {
-      usuariosService.getAllUsers.mockResolvedValue({
-        usuarios: [mockUser],
-        pagination: { page: 1, limit: 10, total: 1 }
-      });
-      const res = await request(app).get('/affiliates/usuarios');
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toHaveProperty('usuarios');
-      expect(res.body).toHaveProperty('pagination');
-      expect(Array.isArray(res.body.usuarios)).toBe(true);
-    });
-
-    it('should return 400 when page is 0 or negative', async () => {
-      const res = await request(app).get('/affiliates/usuarios?page=0');
-      expect(res.statusCode).toBe(400);
-    });
-  });
-
-  describe('POST /affiliates/usuarios/:id_usuario/roles', () => {
-    it('should return 201 when role is added successfully', async () => {
-      usuariosService.addRoleToUser.mockResolvedValue({ id_usuario: 1, id_rol: 1 });
       const res = await request(app)
-        .post('/affiliates/usuarios/1/roles')
-        .send({ id_rol: 1 });
-      expect(res.statusCode).toBe(201);
+        .get('/affiliates/1')
+        .set('Authorization', 'Bearer faketoken');
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toHaveProperty('id', 1);
+      expect(res.body).toHaveProperty('email', 'juan@example.com');
     });
 
-    it('should return 400 when id_rol is missing', async () => {
+    it('should return 404 when affiliate does not exist', async () => {
+      affiliateRepository.getAffiliateById.mockResolvedValue(null);
+
       const res = await request(app)
-        .post('/affiliates/usuarios/1/roles')
-        .send({});
-      expect(res.statusCode).toBe(400);
+        .get('/affiliates/99999')
+        .set('Authorization', 'Bearer faketoken');
+
+      expect(res.statusCode).toBe(404);
+      expect(res.body.message).toBe('El afiliado no existe');
     });
   });
 
-  describe('PUT /affiliates/usuarios/:id_usuario/estado', () => {
-    it('should return 200 with updated user when user exists', async () => {
-      const updatedUser = { ...mockUser, activo: false };
-      usuariosService.toggleUserStatus.mockResolvedValue(updatedUser);
-      const res = await request(app).put('/affiliates/usuarios/1/estado');
+  describe('GET /affiliates', () => {
+    it('should return 200 with all affiliates', async () => {
+      affiliateRepository.getAllAffiliates.mockResolvedValue([mockAffiliate]);
+
+      const res = await request(app)
+        .get('/affiliates')
+        .set('Authorization', 'Bearer faketoken');
+
       expect(res.statusCode).toBe(200);
-      expect(res.body.activo).toBe(false);
     });
 
-    it('should return 404 when user does not exist', async () => {
-      usuariosService.toggleUserStatus.mockRejectedValue(new Error('USER_NOT_FOUND'));
-      const res = await request(app).put('/affiliates/usuarios/99999/estado');
-      expect(res.statusCode).toBe(404);
+    it('should return 200 filtering affiliates by status', async () => {
+      affiliateRepository.getAffiliatesByStatus.mockResolvedValue([mockAffiliate]);
+
+      const res = await request(app)
+        .get('/affiliates?status=ACTIVE')
+        .set('Authorization', 'Bearer faketoken');
+
+      expect(res.statusCode).toBe(200);
+      expect(Array.isArray(res.body)).toBe(true);
+    });
+  });
+
+  describe('GET /affiliates sin autenticación', () => {
+    it('should return 401 when no token is provided', async () => {
+      // Sobreescribimos el mock para que falle la verificación
+      jwt.verify.mockImplementation(() => { throw new Error('invalid token'); });
+
+      const res = await request(app).get('/affiliates/1');
+
+      expect(res.statusCode).toBe(401);
     });
   });
 });
-

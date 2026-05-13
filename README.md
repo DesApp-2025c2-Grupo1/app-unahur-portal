@@ -57,3 +57,48 @@ Para visualizar los correos enviados por el sistema en desarrollo:
 - **Validación de Esquema:** Todas las entradas al sistema son validadas con `Joi` antes de ser procesadas.
 - **Cookies HttpOnly:** Los tokens JWT se manejan vía cookies para prevenir ataques XSS.
 - **BCrypt:** Hashing de contraseñas con factor de costo 10.
+
+## Para correr los test usar npm run test:report
+- Resultados de las pruebas:
+
+- health.test.js — 1 test
+Verifica que el servidor esté vivo.
+
+✅ GET /health devuelve 200
+auth.test.js — 5 tests
+Prueba el login y el acceso protegido:
+
+✅ Login con credenciales correctas → devuelve datos del usuario
+❌ Login con contraseña incorrecta → 401
+❌ Login con usuario que no existe → 401
+❌ Login con afiliado cuya cuenta está inactiva → 401
+❌ GET /auth/me sin token → 401
+
+- usuarios.test.js — 4 tests. Prueba los endpoints de afiliados (requieren token JWT):
+
+✅ GET /affiliates/1 con token → devuelve el afiliado
+❌ GET /affiliates/99999 con token → 404 (no existe)
+✅ GET /affiliates con token → devuelve lista
+✅ GET /affiliates?status=ACTIVE con token → filtra por estado
+❌ GET /affiliates/1 sin token → 401
+
+- integration.test.js — 11 tests. Prueba cómo los 3 módulos interactúan entre sí:
+
+- Flujo Auth ↔ Afiliados:
+
+✅ Afiliado activo puede hacer login
+❌ Afiliado inactivo no puede hacer login (el módulo auth consulta al módulo afiliados)
+✅ ADMIN hace login sin verificar estado de afiliado
+
+- Flujo Auth protegido:
+
+❌ /auth/me sin token → 401
+✅ /auth/me con token válido → devuelve datos
+❌ /auth/me con token inválido → 403
+
+- Flujo Prestadores ↔ Afiliados:
+
+❌ Buscar afiliados sin token → 401
+✅ Prestador busca afiliados con token → devuelve lista
+❌ Ver historia clínica sin token → 401
+✅ Prestador ve historia clínica de un afiliado con token → devuelve historial
